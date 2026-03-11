@@ -6,6 +6,7 @@ import { StrategyEditor } from './StrategyEditor'
 import { NLGenerator } from './NLGenerator'
 import { BacktestRun } from './BacktestRun'
 import { BacktestResult } from './BacktestResult'
+import { DataManager } from './DataManager'
 
 export const router = createBrowserRouter([
   {
@@ -18,6 +19,7 @@ export const router = createBrowserRouter([
       { path: 'nl-generator', element: <NLGenerator /> },
       { path: 'backtests/run', element: <BacktestRun /> },
       { path: 'backtests/results', element: <BacktestResult /> },
+      { path: 'data', element: <DataManager /> },
     ],
   },
 ])

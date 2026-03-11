@@ -1,20 +1,16 @@
 import client from './client'
-import type { MarketDataFile, UploadResponse } from '@/types/marketData'
+import type { MarketDataFile, MarketDataFetchRequest } from '@/types/marketData'
 
 export const marketDataApi = {
   list: () =>
     client.get<MarketDataFile[]>('/market-data').then((r) => r.data),
 
-  upload: (symbol: string, timeframe: string, file: File) => {
-    const form = new FormData()
-    form.append('file', file)
-    return client
-      .post<UploadResponse>(`/market-data/upload?symbol=${symbol}&timeframe=${timeframe}`, form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      })
-      .then((r) => r.data)
-  },
+  fetch: (body: MarketDataFetchRequest) =>
+    client.post<MarketDataFile>('/market-data/fetch', body).then((r) => r.data),
 
-  delete: (symbol: string, timeframe: string) =>
-    client.delete(`/market-data/${symbol}/${timeframe}`).then((r) => r.data),
+  preview: (id: number) =>
+    client.get<{ columns: string[]; rows: Record<string, unknown>[] }>(`/market-data/${id}/preview`).then((r) => r.data),
+
+  delete: (id: number) =>
+    client.delete(`/market-data/${id}`).then((r) => r.data),
 }

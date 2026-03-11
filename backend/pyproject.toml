@@ -20,6 +20,8 @@ dependencies = [
     "numpy>=1.26.4",
     # Backtesting
     "backtrader==1.9.78.123",
+    # Market data
+    "yfinance>=0.2.38",
     # File upload
     "python-multipart>=0.0.9",
     # LLM / HTTP client

@@ -1,50 +1,77 @@
-"""CSVアップロード・バリデーション・保存サービス（Phase 2 で実装）"""
+"""価格データ取得・保存サービス"""
 
+import asyncio
 import os
 from pathlib import Path
 
 import pandas as pd
-from fastapi import UploadFile
+from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.market_data import MarketDataFile
 
-REQUIRED_COLUMNS = {"Date", "Open", "High", "Low", "Close", "Volume"}
 
-
-async def save_csv(
-    file: UploadFile,
+async def fetch_ticker(
     symbol: str,
     timeframe: str,
+    start_date: str,
+    end_date: str,
+    refresh: bool,
     db: AsyncSession,
 ) -> MarketDataFile:
-    content = await file.read()
     filename = f"{symbol}_{timeframe}.csv"
     dest = Path(settings.data_dir) / filename
 
-    # カラムバリデーション
-    import io
-    df = pd.read_csv(io.BytesIO(content))
-    missing = REQUIRED_COLUMNS - set(df.columns)
-    if missing:
-        from fastapi import HTTPException
-        raise HTTPException(
-            status_code=422,
-            detail=f"Missing columns: {', '.join(sorted(missing))}",
+    # キャッシュがあって refresh=False ならDBレコードをそのまま返す
+    if not refresh and dest.exists():
+        result = await db.execute(
+            select(MarketDataFile).where(MarketDataFile.filename == filename)
         )
+        record = result.scalar_one_or_none()
+        if record:
+            return record
 
-    df["Date"] = pd.to_datetime(df["Date"])
-    start_date = df["Date"].min().date()
-    end_date = df["Date"].max().date()
+    # yfinance でダウンロード（同期処理を asyncio.to_thread でラップ）
+    import yfinance as yf
+
+    df = await asyncio.to_thread(
+        yf.download,
+        symbol,
+        start=start_date,
+        end=end_date,
+        interval=timeframe,
+        progress=False,
+        auto_adjust=True,
+    )
+    if df is None or df.empty:
+        raise HTTPException(status_code=502, detail="yfinance returned no data")
+
+    # MultiIndex カラムをフラット化（yfinance >= 0.2.38 で発生する場合がある）
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+
+    # OHLCV に整形して保存
+    df = df[["Open", "High", "Low", "Close", "Volume"]].copy()
+    df = df.reset_index()
+    df.columns = ["Date", "Open", "High", "Low", "Close", "Volume"]
+
+    os.makedirs(settings.data_dir, exist_ok=True)
+    df.to_csv(dest, index=False)
+
+    start = df["Date"].min()
+    end = df["Date"].max()
     row_count = len(df)
 
-    # ファイル保存
-    os.makedirs(settings.data_dir, exist_ok=True)
-    dest.write_bytes(content)
+    # display_name を yfinance から取得
+    try:
+        ticker_info = await asyncio.to_thread(lambda: yf.Ticker(symbol).info)
+        display_name = ticker_info.get("longName") or ticker_info.get("shortName") or symbol
+    except Exception:
+        display_name = symbol
 
-    # DB登録（upsert は既存レコードを更新）
-    from sqlalchemy import select
+    # DB upsert
     result = await db.execute(
         select(MarketDataFile).where(MarketDataFile.filename == filename)
     )
@@ -52,16 +79,18 @@ async def save_csv(
 
     if record:
         record.symbol = symbol
-        record.start_date = start_date
-        record.end_date = end_date
+        record.display_name = display_name
+        record.start_date = start.date() if hasattr(start, "date") else start
+        record.end_date = end.date() if hasattr(end, "date") else end
         record.row_count = row_count
         record.timeframe = timeframe
     else:
         record = MarketDataFile(
             symbol=symbol,
+            display_name=display_name,
             filename=filename,
-            start_date=start_date,
-            end_date=end_date,
+            start_date=start.date() if hasattr(start, "date") else start,
+            end_date=end.date() if hasattr(end, "date") else end,
             row_count=row_count,
             timeframe=timeframe,
         )

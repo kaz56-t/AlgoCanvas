@@ -1,15 +1,22 @@
-import io
+from unittest.mock import MagicMock, patch
 
+import pandas as pd
 from httpx import AsyncClient
 
 STRATEGY_BASE = "/api/v1/strategies"
 MARKET_BASE = "/api/v1/market-data"
 BACKTEST_BASE = "/api/v1/backtests"
 
-SAMPLE_CSV = b"""Date,Open,High,Low,Close,Volume
-2024-01-04,33288,33491,33027,33377,1234567890
-2024-01-05,33377,33750,33290,33706,987654321
-"""
+SAMPLE_DF = pd.DataFrame(
+    {
+        "Open": [33288.0, 33377.0],
+        "High": [33491.0, 33750.0],
+        "Low": [33027.0, 33290.0],
+        "Close": [33377.0, 33706.0],
+        "Volume": [1234567890.0, 987654321.0],
+    },
+    index=pd.DatetimeIndex(["2024-01-04", "2024-01-05"], name="Date"),
+)
 
 SAMPLE_DEFINITION = {
     "version": "1.0",
@@ -17,6 +24,12 @@ SAMPLE_DEFINITION = {
     "nodes": [{"id": "node_1", "type": "Signal", "action": "BUY"}],
     "edges": [],
 }
+
+
+def _make_ticker_mock():
+    ticker = MagicMock()
+    ticker.info = {"longName": "Nikkei 225"}
+    return ticker
 
 
 async def _create_strategy(client: AsyncClient) -> int:
@@ -27,18 +40,21 @@ async def _create_strategy(client: AsyncClient) -> int:
     return res.json()["id"]
 
 
-async def _upload_market_data(client: AsyncClient) -> int:
-    res = await client.post(
-        MARKET_BASE,
-        params={"symbol": "N225", "timeframe": "1d"},
-        files={"file": ("N225_1d.csv", io.BytesIO(SAMPLE_CSV), "text/csv")},
-    )
+async def _fetch_market_data(client: AsyncClient) -> int:
+    with (
+        patch("yfinance.download", return_value=SAMPLE_DF),
+        patch("yfinance.Ticker", return_value=_make_ticker_mock()),
+    ):
+        res = await client.post(
+            f"{MARKET_BASE}/fetch",
+            json={"symbol": "N225", "timeframe": "1d", "start_date": "2024-01-01", "end_date": "2024-01-31"},
+        )
     return res.json()["id"]
 
 
 async def test_create_backtest(client: AsyncClient):
     strategy_id = await _create_strategy(client)
-    market_id = await _upload_market_data(client)
+    market_id = await _fetch_market_data(client)
 
     res = await client.post(
         BACKTEST_BASE,
@@ -59,7 +75,7 @@ async def test_create_backtest(client: AsyncClient):
 
 async def test_get_backtest_status(client: AsyncClient):
     strategy_id = await _create_strategy(client)
-    market_id = await _upload_market_data(client)
+    market_id = await _fetch_market_data(client)
 
     bt = (
         await client.post(
@@ -75,7 +91,7 @@ async def test_get_backtest_status(client: AsyncClient):
 
 async def test_list_backtests(client: AsyncClient):
     strategy_id = await _create_strategy(client)
-    market_id = await _upload_market_data(client)
+    market_id = await _fetch_market_data(client)
 
     await client.post(
         BACKTEST_BASE,
@@ -89,7 +105,7 @@ async def test_list_backtests(client: AsyncClient):
 
 async def test_list_filter_by_strategy(client: AsyncClient):
     strategy_id = await _create_strategy(client)
-    market_id = await _upload_market_data(client)
+    market_id = await _fetch_market_data(client)
 
     await client.post(
         BACKTEST_BASE,
@@ -107,7 +123,7 @@ async def test_list_filter_by_strategy(client: AsyncClient):
 
 async def test_delete_backtest(client: AsyncClient):
     strategy_id = await _create_strategy(client)
-    market_id = await _upload_market_data(client)
+    market_id = await _fetch_market_data(client)
 
     bt = (
         await client.post(
