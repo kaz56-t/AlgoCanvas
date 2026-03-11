@@ -43,7 +43,7 @@
 ### 1.4 動作環境
 
 - ローカルマシン上でDocker Composeにより完結動作
-- インターネット接続不要（価格データは手動インポートまたはローカルキャッシュ）
+- 価格データ取得時はインターネット接続が必要（yfinanceでYahoo Financeから取得・ローカルキャッシュ）
 - 対応OS: macOS / Windows（WSL2）/ Linux
 
 ---
@@ -67,9 +67,14 @@
          ┌───────────┴────────────┐
          │                        │
 ┌────────▼──────────┐   ┌────────▼──────────┐
-│  SQLite DB        │   │  CSVファイル       │
+│  SQLite DB        │   │  CSVキャッシュ     │
 │  (戦略/結果保存)   │   │  (価格データ)     │
-└───────────────────┘   └───────────────────┘
+└───────────────────┘   └────────┬──────────┘
+                                  │ yfinance
+                         ┌────────▼──────────┐
+                         │  Yahoo Finance     │
+                         │  (インターネット)   │
+                         └───────────────────┘
 ```
 
 ### コンテナ構成
@@ -106,6 +111,7 @@
 | ORM | SQLAlchemy | 2.x |
 | DB | SQLite | 3.x（ファイルDB） |
 | バックテスト | backtrader / カスタム実装 | latest |
+| データ取得 | yfinance | latest |
 | データ処理 | pandas / numpy | latest |
 | LLMブリッジ | OpenAI API互換（ローカルLLM対応） | - |
 | バリデーション | Pydantic v2 | 2.x |
@@ -348,17 +354,27 @@ CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
 
 ### 6.4 データローダー（services/data_loader.py）
 
-**対応フォーマット:**
+**取得フロー:**
 
 ```
-Date, Open, High, Low, Close, Volume
-2024-01-01, 100.0, 105.0, 99.0, 103.0, 1000000
+1. yfinanceでtickerを指定してYahoo Financeからダウンロード
+2. pandasDataFrameとして取得（OHLCV）
+3. ローカルCSVキャッシュとして保存（backend/data/market/{symbol}_{timeframe}.csv）
+4. メタ情報（銘柄名・期間・件数・取得日時）をSQLiteに登録
 ```
 
-- CSVファイルのバリデーション（カラム名・型チェック）
-- 日時パース（複数フォーマット対応）
-- 欠損値処理（前日終値補完 or エラー）
-- メタ情報（銘柄名・期間・件数）をSQLiteに登録
+**対応パラメータ:**
+
+| パラメータ | 説明 | 例 |
+|-----------|------|----|
+| `symbol` | Yahoo Finance TickerシンボルまたはISINコード | `7203.T`, `AAPL`, `^N225` |
+| `timeframe` | 時間足 | `1d`, `1wk`, `1mo` |
+| `start_date` | 取得開始日 | `2020-01-01` |
+| `end_date` | 取得終了日 | `2024-12-31` |
+
+- キャッシュが存在する場合はローカルから読み込み（再取得フラグで上書き可）
+- yfinance取得失敗時はHTTP 502エラーを返却
+- 欠損値処理（前日終値補完）
 
 ---
 
@@ -450,13 +466,14 @@ Date, Open, High, Low, Close, Volume
 | カラム | 型 | 説明 |
 |--------|-----|------|
 | id | INTEGER PK | 自動採番 |
-| symbol | TEXT NOT NULL | 銘柄コード・名称 |
-| filename | TEXT NOT NULL | CSVファイル名 |
+| symbol | TEXT NOT NULL | Tickerシンボル（例: `7203.T`, `AAPL`） |
+| display_name | TEXT | 表示用銘柄名（yfinanceから取得） |
+| filename | TEXT NOT NULL | ローカルキャッシュCSVファイル名 |
 | start_date | DATE | データ開始日 |
 | end_date | DATE | データ終了日 |
 | row_count | INTEGER | データ件数 |
-| timeframe | TEXT | 時間足（1d / 1h 等） |
-| uploaded_at | DATETIME | アップロード日時 |
+| timeframe | TEXT | 時間足（`1d` / `1wk` / `1mo`） |
+| fetched_at | DATETIME | 最終取得日時 |
 
 ### 8.2 戦略定義JSONスキーマ
 
@@ -509,7 +526,7 @@ Date, Open, High, Low, Close, Volume
 }
 ```
 
-### 8.3 価格データCSV形式
+### 8.3 価格データキャッシュCSV形式
 
 ```csv
 Date,Open,High,Low,Close,Volume
@@ -517,9 +534,10 @@ Date,Open,High,Low,Close,Volume
 2024-01-05,33377,33750,33290,33706,987654321
 ```
 
-- ファイル保存先: `backend/data/market/{symbol}_{timeframe}.csv`
+- yfinanceが返すDataFrameをそのままCSVとしてキャッシュ保存
+- 保存先: `backend/data/market/{symbol}_{timeframe}.csv`
 - 文字コード: UTF-8
-- 日付フォーマット: YYYY-MM-DD（または YYYY/MM/DD）
+- 日付フォーマット: YYYY-MM-DD
 
 ---
 
@@ -651,9 +669,14 @@ Date,Open,High,Low,Close,Volume
 
 ### 10.7 価格データ管理（/data）
 
-- アップロード済みCSVファイル一覧（銘柄・期間・件数）
-- CSVドラッグ＆ドロップアップロードエリア
+- 取得済みデータ一覧（銘柄・期間・件数・最終取得日時）
+- 新規取得フォーム
+  - Tickerシンボル入力（例: `7203.T`, `AAPL`, `^N225`）
+  - 時間足選択（`1d` / `1wk` / `1mo`）
+  - 開始日・終了日ピッカー
+  - 「取得」ボタン（取得中はスピナー表示）
 - データプレビュー（最初の10行表示）
+- 再取得ボタン（キャッシュを上書き）
 - 削除ボタン
 
 ---
@@ -685,10 +708,24 @@ Date,Open,High,Low,Close,Volume
 
 | メソッド | パス | 説明 | リクエスト | レスポンス |
 |---------|------|------|-----------|----------|
-| GET | `/market-data` | ファイル一覧取得 | - | `MarketDataFile[]` |
-| POST | `/market-data/upload` | CSVアップロード | `multipart/form-data` | `MarketDataFile` |
+| GET | `/market-data` | データ一覧取得 | - | `MarketDataFile[]` |
+| POST | `/market-data/fetch` | Tickerデータ取得 | `MarketDataFetch` | `MarketDataFile` |
 | GET | `/market-data/{id}/preview` | データプレビュー | - | `{rows: Record[]}` |
-| DELETE | `/market-data/{id}` | ファイル削除 | - | `204 No Content` |
+| DELETE | `/market-data/{id}` | データ削除 | - | `204 No Content` |
+
+**MarketDataFetch リクエストボディ:**
+
+```json
+{
+  "symbol": "7203.T",
+  "timeframe": "1d",
+  "start_date": "2020-01-01",
+  "end_date": "2024-12-31",
+  "refresh": false
+}
+```
+
+- `refresh: true` の場合、キャッシュが存在しても再取得して上書き
 
 ### 11.4 自然言語生成API（/api/v1/nl-generate）
 
@@ -731,7 +768,7 @@ Date,Open,High,Low,Close,Volume
 
 | 項目 | 上限 |
 |------|------|
-| CSVアップロードサイズ | 50MB/ファイル |
+| 一度に取得できる期間 | yfinanceの制約に依存 |
 | 戦略保存数 | 上限なし（SQLiteの制約内） |
 | バックテスト結果保存数 | 上限なし |
 
@@ -764,9 +801,9 @@ Date,Open,High,Low,Close,Volume
 
 ### Phase 2 — 価格データ管理（推奨優先度: 高）
 
-- [ ] CSVアップロードAPI実装
-- [ ] データバリデーション・メタデータ登録
-- [ ] データ管理画面実装（アップロード・一覧・削除）
+- [ ] yfinanceによるTicker指定データ取得API実装（`POST /market-data/fetch`）
+- [ ] ローカルCSVキャッシュ保存・メタデータ登録
+- [ ] データ管理画面実装（Ticker入力・取得・一覧・削除）
 
 ### Phase 3 — 戦略CRUD（推奨優先度: 高）
 
@@ -811,7 +848,7 @@ Date,Open,High,Low,Close,Volume
 | `LLM_ENDPOINT` | `http://host.docker.internal:11434` | LLMエンドポイントURL |
 | `LLM_MODEL` | `llama3` | 使用するLLMモデル名 |
 | `LLM_API_KEY` | `""` | APIキー（ローカルLLMの場合は不要） |
-| `MAX_UPLOAD_SIZE_MB` | `50` | CSVアップロード上限（MB） |
+| `YFINANCE_CACHE_ENABLED` | `true` | yfinanceキャッシュ有効/無効 |
 | `CORS_ORIGINS` | `http://localhost:3000` | 許可するオリジン |
 
 ### フロントエンド
@@ -841,19 +878,20 @@ LLMを使わない場合は `NL_PARSER_MODE=rule_based` を環境変数に設定
 
 ---
 
-## 付録 C: 初期データサンプル
+## 付録 C: 対応Tickerシンボル例
 
-テスト用の価格データはYahoo Financeやstooq等からCSV形式でダウンロード可能。
+yfinanceが対応するシンボルであれば何でも指定可能。
 
-```bash
-# Python + yfinanceでサンプルデータを取得する例
-pip install yfinance
-python -c "
-import yfinance as yf
-df = yf.download('7203.T', start='2019-01-01', end='2024-12-31')
-df.to_csv('toyota_1d.csv')
-"
-```
+| 市場 | 例 | 説明 |
+|------|-----|------|
+| 日本株 | `7203.T` | トヨタ自動車 |
+| 日本株 | `9984.T` | ソフトバンクグループ |
+| 米国株 | `AAPL` | Apple |
+| 米国株 | `TSLA` | Tesla |
+| 日本指数 | `^N225` | 日経平均 |
+| 米国指数 | `^SPX` | S&P 500 |
+| 為替 | `USDJPY=X` | ドル円 |
+| 暗号資産 | `BTC-USD` | Bitcoin/USD |
 
 ---
 
