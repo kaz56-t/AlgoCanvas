@@ -60,6 +60,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 大きな実装を行うときは `main` ブランチからブランチを切って実装する。ブランチ名は `feature/<機能名>` の形式を推奨。
 
 
+## テスト
+
+```bash
+# コンテナ内でテスト実行（推奨）
+docker compose exec backend pytest
+
+# 単一ファイルのみ
+docker compose exec backend pytest tests/test_strategies.py -v
+
+# ローカル実行（uv 環境）
+cd backend
+uv pip install --system .[dev]
+pytest
+```
+
+テスト構成: `backend/tests/`
+- `conftest.py` — インメモリ SQLite + `httpx.AsyncClient` フィクスチャ
+- `test_health.py` — ヘルスチェック
+- `test_strategies.py` — 戦略 CRUD 全ケース
+- `test_market_data.py` — CSV アップロード・バリデーション
+- `test_backtests.py` — バックテスト作成・ステータス取得
+
 ## 開発コマンド
 
 ```bash
@@ -93,11 +115,11 @@ docker compose exec backend bash
 バックエンドのパッケージ管理には [uv](https://docs.astral.sh/uv/) を使用する。Dockerイメージ内では `uv pip install --system` で `/usr/local` 直下にインストールする。
 
 ```bash
-# コンテナ内でパッケージを追加（requirements.txt も手動で更新すること）
-docker compose exec backend uv pip install --system <package>
+# パッケージを追加するには pyproject.toml の dependencies を編集してからリビルド
+docker compose up --build backend
 
-# requirements.txt からの一括インストール（ローカル開発時）
-uv pip install -r backend/requirements.txt
+# ローカル開発時（devも含む）
+uv pip install --system -e backend/[dev]
 ```
 
 ## アーキテクチャ
