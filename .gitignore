@@ -1,0 +1,54 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+
+# uv
+.uv/
+
+# ===== Node / Frontend =====
+node_modules/
+dist/
+.vite/
+*.local
+
+# ===== 環境変数 =====
+.env
+.env.*
+!.env.example
+
+# ===== データ =====
+backend/data/db/*.db
+backend/data/market/*.csv
+
+# ===== IDE =====
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+
+# ===== ログ =====
+*.log
+logs/
+
+# ===== テスト / カバレッジ =====
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ===== Docker =====
+docker-compose.override.yml
