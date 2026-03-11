@@ -10,8 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN uv pip install --system --no-cache -r requirements.txt
+COPY pyproject.toml .
+RUN uv pip install --system --no-cache .
 
 # Ensure data directories exist (bind mount may not create them)
 RUN mkdir -p /app/data/db /app/data/market
