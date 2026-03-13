@@ -1,16 +1,19 @@
 export interface MarketDataFile {
+  id: number
   symbol: string
-  timeframe: string
+  display_name: string | null
   filename: string
-  row_count: number
-  start_date: string
-  end_date: string
-  file_size_bytes: number
+  row_count: number | null
+  start_date: string | null
+  end_date: string | null
+  timeframe: string | null
+  fetched_at: string
 }
 
-export interface UploadResponse {
-  message: string
+export interface MarketDataFetchRequest {
   symbol: string
   timeframe: string
-  rows_imported: number
+  start_date: string
+  end_date: string
+  refresh: boolean
 }

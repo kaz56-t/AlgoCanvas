@@ -16,7 +16,7 @@ const navItems: NavItem[] = [
   { to: '/backtests/run', label: 'Backtest', icon: <FlaskConical size={18} />, phase: 4, enabled: false },
   { to: '/backtests/results', label: 'Results', icon: <BarChart2 size={18} />, phase: 4, enabled: false },
   { to: '/nl-generator', label: 'NL Generator', icon: <MessageSquare size={18} />, phase: 5, enabled: false },
-  { to: '/market-data', label: 'Market Data', icon: <Database size={18} />, phase: 2, enabled: false },
+  { to: '/data', label: 'Market Data', icon: <Database size={18} />, phase: 2, enabled: true },
 ]
 
 export function Sidebar() {
@@ -60,7 +60,7 @@ export function Sidebar() {
       </nav>
 
       <div className="border-t p-4">
-        <p className="text-xs text-muted-foreground">Phase 1 — Layout</p>
+        <p className="text-xs text-muted-foreground">Phase 2 — Market Data</p>
       </div>
     </aside>
   )

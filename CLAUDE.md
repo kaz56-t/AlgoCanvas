@@ -79,7 +79,7 @@ pytest
 - `conftest.py` — インメモリ SQLite + `httpx.AsyncClient` フィクスチャ
 - `test_health.py` — ヘルスチェック
 - `test_strategies.py` — 戦略 CRUD 全ケース
-- `test_market_data.py` — CSV アップロード・バリデーション
+- `test_market_data.py` — Ticker取得・バリデーション（yfinanceはモック）
 - `test_backtests.py` — バックテスト作成・ステータス取得
 
 ## 開発コマンド
@@ -173,19 +173,18 @@ SQLite (backend/data/db/algocanvas.db)  +  CSV (backend/data/market/*.csv)
 | `CORS_ORIGINS` | `http://localhost:3000` | 許可オリジン |
 | `VITE_API_BASE_URL` | `http://localhost:8000` | フロントからのAPIベースURL |
 
-## 価格データCSV形式
+## 価格データ
 
-```csv
-Date,Open,High,Low,Close,Volume
-2024-01-04,33288,33491,33027,33377,1234567890
-```
+yfinanceでTicker指定→Yahoo Financeから取得→ローカルCSVキャッシュ保存。
 
-保存先: `backend/data/market/{symbol}_{timeframe}.csv`
+- APIエンドポイント: `POST /api/v1/market-data/fetch`
+- キャッシュ保存先: `backend/data/market/{symbol}_{timeframe}.csv`
+- 対応Ticker例: `7203.T`（トヨタ）, `AAPL`, `^N225`（日経平均）, `BTC-USD`
 
 ## 開発フェーズ（進捗管理用）
 
-- **Phase 1** — Docker + FastAPI骨格 + SQLite + React初期化 + レイアウト
-- **Phase 2** — CSVアップロード・価格データ管理
+- **Phase 1** — Docker + FastAPI骨格 + SQLite + React初期化 + レイアウト ✅
+- **Phase 2** — yfinance Ticker取得・価格データ管理
 - **Phase 3** — 戦略CRUD + ビジュアルエディタ（React Flow）
 - **Phase 4** — バックテストエンジン + 結果画面
 - **Phase 5** — 自然言語アルゴ生成（LLM連携）
