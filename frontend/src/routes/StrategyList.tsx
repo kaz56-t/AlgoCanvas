@@ -5,10 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { LoadingSpinner } from '@/components/common/LoadingSpinner'
-import { Plus, Trash2, Pencil } from 'lucide-react'
+import { Plus, Trash2, Pencil, Copy } from 'lucide-react'
 
 export function StrategyList() {
-  const { strategies, loading, error, fetchStrategies, createStrategy, deleteStrategy } =
+  const { strategies, loading, error, fetchStrategies, createStrategy, deleteStrategy, duplicateStrategy } =
     useStrategyStore()
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
@@ -32,6 +32,10 @@ export function StrategyList() {
   const handleDelete = async (id: number, name: string) => {
     if (!confirm(`Delete strategy "${name}"?`)) return
     await deleteStrategy(id)
+  }
+
+  const handleDuplicate = async (id: number) => {
+    await duplicateStrategy(id)
   }
 
   return (
@@ -87,15 +91,25 @@ export function StrategyList() {
                 <CardTitle className="text-sm font-semibold leading-tight">{s.name}</CardTitle>
                 <div className="flex shrink-0 gap-1">
                   <Link to={`/strategies/${s.id}`}>
-                    <Button variant="ghost" size="icon" className="h-7 w-7">
+                    <Button variant="ghost" size="icon" className="h-7 w-7" title="Edit in visual editor">
                       <Pencil size={14} />
                     </Button>
                   </Link>
                   <Button
                     variant="ghost"
                     size="icon"
+                    className="h-7 w-7 text-muted-foreground"
+                    title="Duplicate strategy"
+                    onClick={() => handleDuplicate(s.id)}
+                  >
+                    <Copy size={14} />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     className="h-7 w-7 text-destructive hover:text-destructive"
                     onClick={() => handleDelete(s.id, s.name)}
+                    title="Delete strategy"
                   >
                     <Trash2 size={14} />
                   </Button>
@@ -115,9 +129,14 @@ export function StrategyList() {
                   ))}
                 </div>
               )}
-              <p className="mt-2 text-xs text-muted-foreground">
-                {new Date(s.updated_at).toLocaleDateString('ja-JP')}
-              </p>
+              <div className="mt-2 flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">
+                  {new Date(s.updated_at).toLocaleDateString('ja-JP')}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {s.definition.nodes?.length ?? 0} nodes
+                </p>
+              </div>
             </CardContent>
           </Card>
         ))}

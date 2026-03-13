@@ -10,6 +10,7 @@ interface StrategyState {
   createStrategy: (data: StrategyCreate) => Promise<Strategy>
   updateStrategy: (id: number, data: StrategyUpdate) => Promise<Strategy>
   deleteStrategy: (id: number) => Promise<void>
+  duplicateStrategy: (id: number) => Promise<Strategy>
 }
 
 export const useStrategyStore = create<StrategyState>((set) => ({
@@ -44,5 +45,11 @@ export const useStrategyStore = create<StrategyState>((set) => ({
   deleteStrategy: async (id) => {
     await strategiesApi.delete(id)
     set((s) => ({ strategies: s.strategies.filter((st) => st.id !== id) }))
+  },
+
+  duplicateStrategy: async (id) => {
+    const copy = await strategiesApi.duplicate(id)
+    set((s) => ({ strategies: [copy, ...s.strategies] }))
+    return copy
   },
 }))

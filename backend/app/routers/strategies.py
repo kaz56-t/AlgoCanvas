@@ -71,3 +71,22 @@ async def delete_strategy(strategy_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Strategy not found")
     await db.delete(strategy)
     await db.commit()
+
+
+@router.post("/{strategy_id}/duplicate", response_model=StrategyResponse, status_code=status.HTTP_201_CREATED)
+async def duplicate_strategy(strategy_id: int, db: AsyncSession = Depends(get_db)):
+    strategy = await db.get(Strategy, strategy_id)
+    if not strategy:
+        raise HTTPException(status_code=404, detail="Strategy not found")
+
+    copy = Strategy(
+        name=f"{strategy.name} (copy)",
+        description=strategy.description,
+        definition=strategy.definition,
+        is_favorite=False,
+        tags=strategy.tags,
+    )
+    db.add(copy)
+    await db.commit()
+    await db.refresh(copy)
+    return copy

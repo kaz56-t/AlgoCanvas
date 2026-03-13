@@ -16,4 +16,7 @@ export const strategiesApi = {
 
   delete: (id: number) =>
     client.delete(`/strategies/${id}`).then((r) => r.data),
+
+  duplicate: (id: number) =>
+    client.post<Strategy>(`/strategies/${id}/duplicate`).then((r) => r.data),
 }

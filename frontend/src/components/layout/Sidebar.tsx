@@ -60,7 +60,7 @@ export function Sidebar() {
       </nav>
 
       <div className="border-t p-4">
-        <p className="text-xs text-muted-foreground">Phase 2 — Market Data</p>
+        <p className="text-xs text-muted-foreground">Phase 3 — Visual Editor</p>
       </div>
     </aside>
   )

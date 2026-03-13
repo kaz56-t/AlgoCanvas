@@ -18,7 +18,8 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "tailwind-merge": "^2.5.3",
-    "lucide-react": "^0.453.0"
+    "lucide-react": "^0.453.0",
+    "reactflow": "^11.11.4"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",
